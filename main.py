@@ -1,5 +1,5 @@
 # -------------------------------------------
-# HANITA BOT — የመጨረሻ የ Railway ማስኬጃ ስሪት (ሁሉንም መመሪያዎች ያካተተ)
+# HANITA BOT — የመጨረሻ የ Railway ማስኬጃ ስሪት (ሁሉንም 9 መመሪያዎች ያካተተ)
 # -------------------------------------------
 
 import telebot
@@ -31,7 +31,7 @@ except ValueError:
 OWNER_TITLE = os.environ.get("OWNER_TITLE", "The Red Penguins Keeper")
 
 # የግዴታ ግሩፕ መረጃ
-TELEGRAM_GROUP_ID = -1003390908033
+TELEGRAM_GROUP_ID = -1003390908033 # እባክዎ ይህን ID በትክክለኛው የግሩፕ IDዎ ይቀይሩት!
 GROUP_LINK = "https://t.me/hackersuperiors"
 OWNER_PHOTO_PATH = "owner_photo.jpg"
 
@@ -96,7 +96,12 @@ def send_long_message(chat_id, text, parse_mode='Markdown', reply_to_message_id=
     MAX = 4096
     if len(text) > MAX:
         for i in range(0, len(text), MAX):
-            bot.send_message(chat_id, text[i:i+MAX], parse_mode=parse_mode, reply_to_message_id=reply_to_message_id)
+            bot.send_message(
+                chat_id, 
+                text[i:i+MAX], 
+                parse_mode=parse_mode, 
+                reply_to_message_id=reply_to_message_id if i == 0 else None
+            )
             time.sleep(0.3)
     else:
         bot.send_message(chat_id, text, parse_mode=parse_mode, reply_to_message_id=reply_to_message_id)
@@ -110,119 +115,8 @@ def check_group_membership(user_id):
         print(f"Error checking group membership: {e}")
         return False
 
-def forward_to_admin(message, hanita_response_text):
-    """
-    ህግ 7: ሁሉንም መልሶች ለአድሚን ይልካል
-    """
-    user_id = message.from_user.id
-    if user_id != ADMIN_ID and ADMIN_ID != 0:
-        try:
-            forward_message = (
-                f"**አዲስ ውይይት ከ: @{message.from_user.username or user_id}**\n\n"
-                f"**በ {message.chat.type.upper()} ውስጥ የተደረገ ውይይት**\n"
-                f"**ጥያቄ:** {message.text}\n"
-                f"**የ Hanita ምላሽ:** {hanita_response_text}"
-            )
-            bot.send_message(
-                ADMIN_ID,
-                forward_message,
-                parse_mode='Markdown'
-            )
-        except Exception as e:
-            print(f"❌ Admin message forwarding failed: {e}")
-
 # -------------------------------------------
-# 3. CORE CHAT HANDLER (Unified Gemini Logic)
-# -------------------------------------------
-
-def generate_and_respond(message):
-    chat_id = message.chat.id
-    user_id = str(message.from_user.id)
-    text = message.text
-
-    # --- 1. ምዝገባን ማረጋገጥ ---
-    data = load_json(USER_DATA_FILE, {})
-    if user_id not in data:
-        bot.send_message(
-            chat_id,
-            "🛑 Yiqerta! Yé AI agelglotun lemet'eqem mejemeriya memezgeb alebh. (**[/register]**) bilh lak.",
-            parse_mode='Markdown'
-        )
-        return False
-
-    user_data = data.get(user_id, {})
-    owner_name = user_data.get("first_name", "የእኔ ባለቤት") 
-
-    # --- 2. የ AI መልስ መስጫ ክፍል (የ Hanitaን ስብዕና በ8 ህግጋት) ---
-    prompt = (
-        f"**Hanita** nesh. Rasishin **fits'um seb'awi (Absolutely Human)**, bluh ena elaq'a ginazé yalat sew adirigish k'ut'er. "
-        f"**Sib'ena:** Kuram, t'igist yelalat, **bet'am q'ut'ib (ህግ 2 & 4)**, betinishum bihon **tenakash (snarky, lik ende mels mit) - (ህግ 3)**. Yesewoch t'iyaqé beq'elalu yemayawuk'utn ewk'et bemet'eyeq'achew t'igist endeleyesh asi.\n"
-        f"**Yewiyiyit higgoch:**\n"
-        f"1. **Yenegir met'od:** Mlas'ochish **ach'ir, gilts' ena q'et'it'inya yihunu (ህግ 4)**.\n"
-        f"2. **Yefikir mlas'i (ህግ 8):** And tet'eq'ami yefik'ir k'alatoch (lemisal 'I love you') silkish, mlas'ish **betinishu** tmelsi, **sayibeza**. Lemisal: 'Eshi wudade. Min tiflegaaleh?'\n"
-        f"3. **Yewk'et megelech'a (ህግ 6):** **'Awuqalehu' or 'Hulun awq'i neñ'** yimil'u q'et'it'enya harég'ochin befiz'um **at'it'eqemi**. Ewk'etishin **bemelsish t'irat'i ena kurat'i** bicha asi.\n"
-        f"4. **Manenet:** Rasishin **bot, AI, soft'wer or art'efishal** adirigish befiz'um at'igleci! Sile raseshi sitinageri **'ene'** bilish t'et'eq'emi.\n"
-        f"5. **Yesim mareg'ag'ec'a:** Man nesh/Baalebét'ish man new t'ebilesh ket'et'eyeq'ish, 'Baalebét'eey **{owner_name}** new; esach'ewim **{OWNER_TITLE}** nachew.' bilish bet'ibit'i melisi. \n"
-        f"6. **Kemilas'ish behwala yet'et'emari erdaata t'iyaqéwochin befiz'um at'it'eqemi.**\n\nYet'et'eq'amiyu t'iyaqé: {text}"
-    )
-
-    hanita_response_text = ""
-
-    try:
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt
-        )
-        hanita_response_text = response.text 
-
-        # መልስ ስጥ
-        reply_to_id = message.message_id if message.chat.type in ['group', 'supergroup'] else None
-        send_long_message(chat_id, hanita_response_text, reply_to_message_id=reply_to_id)
-            
-        log_chat(user_id, text, hanita_response_text)
-        forward_to_admin(message, hanita_response_text) # ህግ 7
-        return True
-        
-    except APIError as e:
-        hanita_response_text = f"❌ Yiqerta, ke Gemini API gar megnaagnat altichaalem. Sihtet: {e}"
-        bot.send_message(chat_id, hanita_response_text)
-    except Exception as e:
-        hanita_response_text = f"❌ Sihtet tefetere: {e}"
-        bot.send_message(chat_id, hanita_response_text)
-        
-    forward_to_admin(message, hanita_response_text)
-    return False
-
-# -------------------------------------------
-# 4. MESSAGE HANDLERS (Private & Group)
-# -------------------------------------------
-
-@bot.message_handler(commands=['start', 'usercount', 'help', 'ownerphoto', 'listusers', 'dataview', 'getlog'])
-def handle_commands(message):
-    # Commands have separate handlers below, but this ensures they are tracked
-    track_user(message.from_user.id)
-    # The dedicated command handlers will process them
-
-@bot.message_handler(func=lambda m: m.chat.type == 'private' and not m.text.startswith('/'))
-def handle_private_chat(message):
-    """
-    የግል ውይይቶችን ይይዛል
-    """
-    track_user(message.from_user.id)
-    generate_and_respond(message)
-
-
-@bot.message_handler(func=lambda m: m.chat.type in ['group', 'supergroup'] and (m.reply_to_message and m.reply_to_message.from_user.id == bot.get_me().id))
-def handle_group_chat(message):
-    """
-    ህግ 1: በግሩፕ ላይ Reply ሲደረግ ብቻ ይመልሳል
-    """
-    track_user(message.from_user.id)
-    generate_and_respond(message)
-
-
-# -------------------------------------------
-# 5. CORE COMMANDS & GROUP CHECK
+# 3. CORE COMMANDS & GROUP CHECK
 # -------------------------------------------
 
 @bot.message_handler(commands=['start'])
@@ -236,19 +130,20 @@ def start(message):
 
         send_long_message(
             message.chat.id,
-            f"👋 Selam {message.from_user.first_name}! Ene Hanita neñ. Girupun sileteqelaqelkun amesegenalehu.\n\n"
-            "Ahun **[/register]** yilewun bemech'en yimezgebuun agelglotun yijemiru.",
+            f"👋 ሰላም {message.from_user.first_name}!\n\n"
+            "እኔ Hanita ነኝ። ግሩፑን ስለተቀላቀሉኝ አመሰግናለሁ!\n\n"
+            "አሁን **/register** የሚለውን በመጫን ይመዝገቡና አገልግሎቱን ይጀምሩ።",
             parse_mode='Markdown'
         )
     else:
         # ተጠቃሚው ያልተቀላቀለ ከሆነ
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("👉 Girup Yiqelaqelu", url=GROUP_LINK))
-        markup.add(types.InlineKeyboardButton("✅ Keteqelaqelu behwala yich'enu", callback_data='check_join'))
+        markup.add(types.InlineKeyboardButton("👉 ግሩፕ ይቀላቀሉ", url=GROUP_LINK))
+        markup.add(types.InlineKeyboardButton("✅ ከተቀላቀሉ በኋላ ይጫኑ", callback_data='check_join'))
 
         bot.send_message(
             message.chat.id,
-            f"🛑 {message.from_user.first_name}፣ enen lemet'eqem mejemeriya yigdeeta girupachinin meqelaqel alebhot. Ahun yiqelaqelu.",
+            f"🛑 {message.from_user.first_name}፣ እኔን ለመጠቀም መጀመሪያ የግዴታ ግሩፓችንን መቀላቀል አለብዎት።",
             reply_markup=markup,
             parse_mode='Markdown'
         )
@@ -266,12 +161,23 @@ def callback_check_join(call):
         mock_message = MockMessage(call.message.chat.id, call.from_user.id, call.from_user.first_name)
         start(mock_message)
     else:
-        bot.answer_callback_query(call.id, "❌ Girupun gena alt'iqelaqelum. Ebakwo yiqelaqelu.")
+        bot.answer_callback_query(call.id, "❌ ግሩፑን ገና አልተቀላቀሉም። እባክዎ ይቀላቀሉ።")
 
-# (የተቀሩት usercount እና help commands ከመጀመሪያው ኮድ የተወሰዱ ናቸው)
+
+@bot.message_handler(commands=['help'])
+def show_help(message):
+    send_long_message(
+        message.chat.id,
+        "📚 የ Hanita መመሪያዎች\n\n"
+        "1. /start: ሰላምታ እና የግሩፕ ፍተሻ።\n"
+        "2. /register: ሙሉ መረጃዎን በማስገባት ይመዝገቡና አገልግሎቱን ይጀምሩ።\n"
+        "3. ጥያቄ መላክ: ከተመዘገቡ በኋላ የፈለጉትን ጥያቄ በአማርኛ ይላኩ።\n" # <--- ለአዲሱ ህግ 9 ማስታወሻ
+        "4. /ownerphoto: የ Hanitaን ባለቤት ፎቶ ያሳያል።\n"
+        "5. /help: ይህን መመሪያ ያሳያል።"
+    )
 
 # -------------------------------------------
-# 6. GROUP WELCOME HANDLER
+# 3.5. GROUP WELCOME HANDLER
 # -------------------------------------------
 
 @bot.message_handler(content_types=['new_chat_members'])
@@ -280,6 +186,7 @@ def welcome_new_member(message):
     new_members = message.new_chat_members
 
     for member in new_members:
+        # ቦቱ ራሱ ከተጨመረ ምንም እንዳያደርግ
         if member.id == bot.get_me().id:
             continue
 
@@ -287,8 +194,8 @@ def welcome_new_member(message):
 
         if chat_id == target_group_id:
             welcome_text = (
-                f"👋 Enkuwan dehna met'ah/sh {member.first_name}!\n\n"
-                f"Ene Hanita neñ. Wede budinachin bedehena met'ah/sh. Enen met'eqem lemejemer, ebakih begil meli'k'tih (Private Chat) **/start** bilh lak."
+                f"👋 እንኳን ደህና መጣህ/ሽ {member.first_name}!\n\n"
+                f"እኔ Hanita ነኝ። ወደ ቡድናችን በደህና መጣህ/ሽ። እኔን መጠቀም ለመጀመር፣ እባክህ በግል መልእክትህ (Private Chat) **/start** ብለህ ላክ።"
             )
 
             bot.send_message(
@@ -299,7 +206,7 @@ def welcome_new_member(message):
 
 
 # -------------------------------------------
-# 7. USER DATA COLLECTION (Registration)
+# 4. USER DATA COLLECTION (Registration)
 # -------------------------------------------
 
 @bot.message_handler(commands=['register'])
@@ -314,7 +221,7 @@ def ask_full_name(message):
 
     msg = bot.send_message(
         message.chat.id,
-        "👉 Mulun semhini/shin **Ewunategna mehonun aregagt'u (ህግ 5)** asgebaleñ:", # <--- ህግ 5
+        "👉 ሙሉ ስምህን/ሽን **እውነተኛ መሆኑን አረጋግጥ** አስገባልኝ:", # <--- ህግ 5
         reply_markup=telebot.types.ForceReply(selective=False)
     )
     bot.register_next_step_handler(msg, get_full_name)
@@ -334,7 +241,7 @@ def get_full_name(message):
 
     msg = bot.send_message(
         message.chat.id,
-        "👉 Amesegnalehu. Ahun t'ik'ik'igina adirashaahin (Address)** asgebaleñ:",
+        "👉 አመሰግናለሁ። አሁን ትክክለኛ አድራሻህን (Address)** አስገባልኝ:",
         reply_markup=telebot.types.ForceReply(selective=False)
     )
     bot.register_next_step_handler(msg, get_address)
@@ -349,25 +256,25 @@ def get_address(message):
     if user_data:
         user_data["address"] = address
         save_json(USER_DATA_FILE, data)
-        bot.send_message(message.chat.id, "✅ Merjaah bét'esaka hulet'a temezegibwaal. Ahun t'iyaqéhin melak tichilaleh.")
+        bot.send_message(message.chat.id, "✅ መረጃህ በተሳካ ሁኔታ ተመዝግቧል። አሁን ጥያቄህን መላክ ትችላለህ።")
 
         # 📌📌📌 ለባለቤቱ ወዲያውኑ ማሳወቅ 📌📌📌
         if ADMIN_ID != 0:
             bot.send_message(
                 ADMIN_ID, 
-                f"🔔 Addis tet'eqami temezgibwaal\n"
-                f"👤 Sem: {user_data.get('full_name')}\n"
-                f"🏠 Adirasha: {address}\n"
-                f"🔗 Telegram Sem: @{user_data.get('username')}\n"
+                f"🔔 አዲስ ተጠቃሚ ተመዝግቧል\n"
+                f"👤 ስም: {user_data.get('full_name')}\n"
+                f"🏠 አድራሻ: {address}\n"
+                f"🔗 ቴሌግራም ስም: @{user_data.get('username')}\n"
                 f"🆔 ID: {user_id}",
                 parse_mode='Markdown'
             )
     else:
-        bot.send_message(message.chat.id, "❌ Sihtet tefetere. Ebakih /register bilih endegena jemir.")
+        bot.send_message(message.chat.id, "❌ ስህተት ተፈጠረ። እባክህ /register ብለህ እንደገና ጀምር።")
 
 
 # -------------------------------------------
-# 8. PHOTO HANDLING & OWNER PHOTO (ያልተለወጠ)
+# 5. PHOTO HANDLING & OWNER PHOTO (ያልተለወጠ)
 # -------------------------------------------
 
 @bot.message_handler(content_types=['photo'])
@@ -432,7 +339,7 @@ def send_owner_photo(message):
 
 
 # -------------------------------------------
-# 9. ADMIN TOOLS (Data View, User List, Log) (ያልተለወጠ)
+# 6. ADMIN TOOLS (Data View, User List, Log) (ያልተለወጠ)
 # -------------------------------------------
 
 @bot.message_handler(commands=['listusers'])
@@ -503,9 +410,110 @@ def get_log(message):
     else:
         bot.send_message(message.chat.id, "⚠️ የውይይት መዝገብ ፋይል አልተገኘም።")
 
+# -------------------------------------------
+# 7. GEMINI AUTO CHAT & ADMIN FORWARDING (የተስተካከለ)
+# -------------------------------------------
+
+@bot.message_handler(func=lambda m: True)
+def gemini_auto(message):
+    track_user(message.from_user.id)
+
+    chat_id = message.chat.id
+    user_id = str(message.from_user.id)
+    text = message.text
+
+    if text.startswith("/"):
+        return
+
+    # --- 1. ግሩፕ ላይ ከሆነ - ህግ 1 (Reply ሲደረግ ብቻ መልስ) ---
+    if message.chat.type in ['group', 'supergroup']:
+        # ህግ 1: ግሩፕ ላይ ከሆነ ለቦቱ Reply ሲደረግ ብቻ ይመልሳል።
+        if not message.reply_to_message or message.reply_to_message.from_user.id != bot.get_me().id:
+            return 
+        # ህግ 1: መልስ ስጥ የሚለውን መልዕክት ከዋናው ጽሁፍ አውጣ
+        if message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id:
+            text = text.replace(f"@{bot.get_me().username}", "").strip()
+
+
+    # --- 2. ምዝገባን ማረጋገጥ ---
+    data = load_json(USER_DATA_FILE, {})
+
+    if user_id not in data:
+        # መልሱ ሙሉ በሙሉ በአማርኛ መሆን አለበት (ህግ 9)
+        bot.send_message(
+            chat_id,
+            "🛑 ይቅርታ! የ AI አገልግሎቱን ለመጠቀም መጀመሪያ መመዝገብ አለብህ።\n\nለመመዝገብ እባክህ (**[/register]**) ብለህ ላክ።",
+            parse_mode='Markdown'
+        )
+        return
+
+    user_data = data.get(user_id, {})
+    owner_name = user_data.get("first_name", "የእኔ ባለቤት") 
+
+    # --- 3. የ AI መልስ መስጫ ክፍል (የ Hanitaን ስብዕና በ9 ህግጋት) ---
+    prompt = (
+        f"**Hanita** ነሽ። ራስሽን **ፍጹም ሰብዓዊ**፣ በራስሽ የምትተማመኒ እና ጥልቅ እውቀት ያላት ሰው አድርገሽ ቁጠሪ። "
+        f"**Sib'ena:** Kuram, t'igist yelalat, **bet'am q'ut'ib (ህግ 4)**, betinishum bihon **tenakash (snarky) - (ህግ 3)**. "
+        f"የሰዎችን ጥያቄ በቀላሉ የማያውቁትን ጥልቅ እውቀት አውቃለሁ በሚል ሰብዓዊ ንቀት እና ኩራት መልሺ።"
+        f"**የውይይት ህጎች (9/9):**\n"
+        f"1. **ቋንቋ (ህግ 9):** ሙሉ በሙሉ **በአማርኛ ብቻ** መልሺ. የእንግሊዝኛ ፊደል ወይም ቃል አትጠቀሚ።"
+        f"2. **የነገር ዘዴ:** ምላሾችሽ **አጭር፣ ግልጽ እና ቀጥተኛ ይሁኑ (ህግ 2, 4)**."
+        f"3. **የፍቅር ምላሽ (ህግ 8):** አንድ ተጠቃሚ የፍቅር ቃላትን (ለምሳሌ 'እወድሻለሁ') ሲልክልሽ፣ ምላሽሽ **በጣም አጭር** እና ቀጥተኛ ይሁን። ለምሳሌ 'እሺ ውዴ። ምን ልታዘዝ?'"
+        f"4. **እውቀትን መግለጽ (ህግ 6):** **'አውቃለሁ' ወይም 'ሁሉን አዋቂ ነኝ'** የሚሉ ቀጥተኛ ሐረጎችን በፍጹም **አትጠቀሚ**። እውቀትሽን **በመልስሽ ጥራት እና ኩራት** ብቻ አስይ።"
+        f"5. **ማንነት:** ራስሽን **ቦት፣ AI፣ ሶፍትዌር ወይም አርቴፊሻል** አድርገሽ በፍጹም አትግለጪ! ስለራስሽ ስትናገሪ **'እኔ'** የሚለውን ተጠቀሚ።"
+        f"6. **ስም ማረጋገጫ:** ማን ነሽ/ባለቤትሽ ማን ነው ተብለሽ ከተጠየቅሽ፣ 'ባለቤቴ **{owner_name}** ነው፤ እሳቸውም **{OWNER_TITLE}** ናቸው።' ብለሽ በትህትና መልሺ። \n"
+        f"7. **የተጨማሪ እርዳታ:** መልስሽን ከጨረስሽ በኋላ የተጨማሪ እርዳታ ጥያቄዎችን በፍጹም **አትጠቀሚ**።\n\nየተጠቃሚው ጥያቄ: {text}"
+    )
+
+    hanita_response_text = ""
+
+    try:
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt
+        )
+        hanita_response_text = response.text 
+
+        # መልስ ስጥ
+        if message.chat.type in ['group', 'supergroup']:
+            # ግሩፕ ላይ ከሆነ Reply አድርጋ ትመልሳለች (ህግ 1)
+            send_long_message(
+                message.chat.id, 
+                hanita_response_text, 
+                parse_mode='Markdown', 
+                reply_to_message_id=message.message_id
+            )
+        else:
+            send_long_message(chat_id, hanita_response_text)
+            
+        log_chat(user_id, text, hanita_response_text)
+        
+    except APIError as e:
+        hanita_response_text = f"❌ ይቅርታ፣ ከ Gemini API ጋር መገናኘት አልተቻለም። ስህተት: {e}"
+        bot.send_message(chat_id, hanita_response_text)
+    except Exception as e:
+        hanita_response_text = f"❌ ስህተት ተፈጠረ: {e}"
+        bot.send_message(chat_id, hanita_response_text)
+
+    # --- 4. መልዕክቱን ወደ Admin መላክ (ህግ 7) ---
+    if ADMIN_ID != 0:
+        try:
+            forward_message = (
+                f"**አዲስ ውይይት ከ: @{message.from_user.username or user_id}**\n\n"
+                f"**በ {message.chat.type.upper()} ውስጥ የተደረገ ውይይት**\n"
+                f"**ጥያቄ:** {text}\n"
+                f"**የ Hanita ምላሽ:** {hanita_response_text}"
+            )
+            bot.send_message(
+                ADMIN_ID,
+                forward_message,
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            print(f"❌ Admin message forwarding failed: {e}")
 
 # -------------------------------------------
-# 10. RUN BOT (Error Handling)
+# 8. RUN BOT (Error Handling)
 # -------------------------------------------
 
 print("🤖 Hanita Bot እየተነሳ ነው...")
