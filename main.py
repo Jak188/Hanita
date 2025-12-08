@@ -33,6 +33,7 @@ OWNER_TITLE = os.environ.get("OWNER_TITLE", "The Red Penguins Keeper")
 
 # የግዴታ ግሩፕ መረጃ
 # እባክዎ ትክክለኛውን የ Group ID ያስገቡ
+# ማሳሰቢያ: የቡድኑ ID (Supergroup ከሆነ) በ -100 ይጀምራል
 TELEGRAM_GROUP_ID = -1003390908033 
 GROUP_LINK = "https://t.me/hackersuperiors" 
 OWNER_PHOTO_PATH = "owner_photo.jpg"
@@ -67,6 +68,7 @@ def load_json(path, default):
             try:
                 return json.load(f)
             except json.JSONDecodeError:
+                # ፋይሉ ባዶ ከሆነ ወይም የተበላሸ ከሆነ Default Value ይመልሳል
                 return default
     return default
 
@@ -113,8 +115,10 @@ def check_group_membership(user_id):
     """ተጠቃሚው ግሩፑን መቀላቀሉን ያረጋግጣል"""
     try:
         chat_member = bot.get_chat_member(TELEGRAM_GROUP_ID, user_id)
+        # 'member', 'administrator', 'creator' ከሆኑ እውነት ይመልሳል
         return chat_member.status in ['member', 'administrator', 'creator']
-    except Exception as e:
+    except Exception:
+        # ግሩፑ ID ስህተት ከሆነ ወይም ተጠቃሚው ከታገደ/ከወጣ
         return False
 
 # -------------------------------------------
@@ -135,7 +139,8 @@ def start(message):
             f"👋 ሰላም {message.from_user.first_name}!\n\n"
             "እኔ Hanita ነኝ። ግሩፑን ስለተቀላቀሉኝ አመሰግናለሁ!\n\n"
             "አሁን **/register** የሚለውን በመጫን ይመዝገቡና አገልግሎቱን ይጀምሩ።",
-            parse_mode='Markdown'
+            parse_mode='Markdown',
+            reply_markup=markup
         )
     else:
         # ተጠቃሚው ያልተቀላቀለ ከሆነ
@@ -154,13 +159,15 @@ def start(message):
 def callback_check_join(call):
     if check_group_membership(call.from_user.id):
         bot.delete_message(call.message.chat.id, call.message.message_id)
+        
         # start() ተግባርን ለመጥራት የሚሆን MockMessage መፍጠር
         class MockMessage:
-            def __init__(self, chat_id, user_id, first_name):
+            def __init__(self, chat_id, user):
                 self.chat = types.Chat(chat_id, 'private')
-                self.from_user = types.User(user_id, is_bot=False, first_name=first_name)
+                self.from_user = user
         
-        mock_message = MockMessage(call.message.chat.id, call.from_user.id, call.from_user.first_name)
+        mock_user = call.from_user
+        mock_message = MockMessage(call.message.chat.id, mock_user)
         start(mock_message)
     else:
         bot.answer_callback_query(call.id, "❌ ግሩፑን ገና አልተቀላቀሉም። እባክዎ ይቀላቀሉ።")
@@ -175,7 +182,7 @@ def user_count(message):
     try:
         users = load_json(USER_FILE, [])
         count = len(users)
-        bot.send_message(message.chat.id, f"👥 Hanitaን የሚጠቀሙት ጠቅላላ ቁጥር: {count} ናቸው።", parse_mode='Markdown')
+        bot.send_message(message.chat.id, f"👥 Hanitaን የሚጠቀሙት ጠቅላላ ቁጥር: **{count}** ናቸው።", parse_mode='Markdown')
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ ስህተት ተፈጠረ: {e}")
 
@@ -183,10 +190,10 @@ def user_count(message):
 def show_help(message):
     send_long_message(
         message.chat.id,
-        "📚 የ Hanita መመሪያዎች\n\n"
+        "📚 **የ Hanita መመሪያዎች**\n\n"
         "1. /start: ሰላምታ እና የግሩፕ ፍተሻ።\n"
         "2. /register: ሙሉ መረጃዎን በማስገባት ይመዝገቡና አገልግሎቱን ይጀምሩ።\n"
-        "3. ጥያቄ መላክ: ከተመዘገቡ በኋላ የፈለጉትን ጥያቄ በአማርኛ ወይም በእንግሊዝኛ ይላኩ።\n"
+        "3. **ጥያቄ መላክ:** ከተመዘገቡ በኋላ የፈለጉትን ጥያቄ በአማርኛ ወይም በእንግሊዝኛ ይላኩ።\n"
         "4. /ownerphoto: የ Hanitaን ባለቤት ፎቶ ያሳያል።\n"
         "5. /help: ይህን መመሪያ ያሳያል።"
     )
@@ -209,7 +216,7 @@ def welcome_new_member(message):
 
         if chat_id == target_group_id:
             welcome_text = (
-                f"👋 እንኳን ደህና መጣህ/ሽ {member.first_name}!\n\n"
+                f"👋 እንኳን ደህና መጣህ/ሽ **{member.first_name}**!\n\n"
                 f"እኔ Hanita ነኝ። ወደ ቡድናችን በደህና መጣህ/ሽ። እኔን መጠቀም ለመጀመር፣ እባክህ በግል መልእክትህ (Private Chat) **/start** ብለህ ላክ።"
             )
 
@@ -265,7 +272,7 @@ def get_full_name(message):
 
     msg = bot.send_message(
         message.chat.id,
-        "👉 አመሰግናለሁ። አሁን ትክክለኛ አድራሻህን (Address)** አስገባልኝ:",
+        "👉 አመሰግናለሁ። አሁን ትክክለኛ አድራሻህን (**Address**) አስገባልኝ:",
         reply_markup=telebot.types.ForceReply(selective=False)
     )
     bot.register_next_step_handler(msg, get_address)
@@ -284,13 +291,16 @@ def get_address(message):
 
         # 📌📌📌 ለባለቤቱ ወዲያውኑ ማሳወቅ 📌📌📌 (7ኛ ህግን ያካትታል)
         if ADMIN_ID != 0:
-            bot.send_message(
-                ADMIN_ID, 
-                f"🔔 አዲስ ተጠቃሚ ተመዝግቧል\n"
+            admin_message = (
+                f"🔔 **አዲስ ተጠቃሚ ተመዝግቧል**\n"
                 f"👤 ስም: {user_data.get('full_name')}\n"
                 f"🏠 አድራሻ: {address}\n"
-                f"🔗 ቴሌግራም ስም: @{user_data.get('username')}\n"
-                f"🆔 ID: {user_id}",
+                f"🔗 ቴሌግራም ስም: @{user_data.get('username') or 'N/A'}\n"
+                f"🆔 ID: {user_id}"
+            )
+            bot.send_message(
+                ADMIN_ID, 
+                admin_message,
                 parse_mode='Markdown'
             )
     else:
@@ -435,7 +445,7 @@ def get_log(message):
         bot.send_message(message.chat.id, "⚠️ የውይይት መዝገብ ፋይል አልተገኘም።")
 
 # -------------------------------------------
-# 7. GEMINI AUTO CHAT & ADMIN FORWARDING (አዲስ ሰብዓዊ፣ ቁጥብ እና ሁሉን አዋቂ ስብዕና)
+# 7. GEMINI AUTO CHAT & ADMIN FORWARDING (የተስተካከለ ስብዕና እና Override)
 # -------------------------------------------
 
 # የውይይት ታሪክን ለመያዝ
@@ -469,6 +479,88 @@ def gemini_auto(message):
     chat_id = message.chat.id
     user_id = str(message.from_user.id)
     text = message.text
+
+    # 📌📌📌 አዲስ: የአድሚን Override ፍተሻ 📌📌📌
+    if message.from_user.id == ADMIN_ID:
+        # አድሚኑ 'መልስ:' የሚል መመሪያ ከላከ (በአማርኛ ወይም በእንግሊዝኛ)
+        if text.lower().startswith("መልስ:") or text.lower().startswith("response:"):
+            
+            # መልዕክቱ የሌላ ተጠቃሚ መልዕክት ላይ Reply የተደረገበት መሆኑን ማረጋገጥ
+            if message.reply_to_message:
+                
+                # መልስ የተሰጠው መልዕክት ከመደበኛ ተጠቃሚ ነው?
+                if str(message.reply_to_message.from_user.id) != str(bot.get_me().id):
+                    bot.send_message(chat_id, "❌ መመሪያ ለመላክ መመለስ ያለብህ ለ**Hanita Forward** ለደረሰው መልዕክት ሳይሆን፣ Hanita Forward ያደረገችው የ**ተጠቃሚው ጥያቄ** ላይ ነው።")
+                    return
+                
+                # Forwarded message ከሆነ (በAdmin Chat ውስጥ)፣ የ Forwarded from Userን ID ማግኘት
+                # ይህ እጅግ በጣም አስቸጋሪ ነው - ስለዚህ አድሚን በራሱ ውይይት ለራሱ በ Forwarding የመጣ መልዕክት ሲመልስ
+                # ትክክለኛውን ተጠቃሚ ID ከጽሑፉ ማውጣት
+                
+                # ቀላል ዘዴ: አድሚን በቀጥታ ለቦቱ የላከው የጥያቄ/መልስ Forwarded ጽሁፍ ውስጥ Target ID መፈለግ
+                # ይህንን ችግር ለመፍታት እጅግ ቀላሉ መንገድ አድሚን ለተጠቃሚው በቀጥታ በ Telegram reply ማድረግ ነው
+                
+                # ለዚህ የ Override System በAdmin Chat ውስጥ ለ Hanita Forward ለደረሰው መልዕክት Reply እንዲያደርግ እንጠይቃለን።
+                
+                try:
+                    # የ Target ID ከ Forwarded message ጽሁፍ ማውጣት (በቦቱ የተላከው Forwarding ጽሁፍ)
+                    # ምሳሌ: **አዲስ ውይይት ከ: @username**\n\n ... **ተጠቃሚ ID:** 123456789
+                    
+                    forwarded_text = message.reply_to_message.text
+                    
+                    # Target User IDን ከ Forwarded message ጽሑፍ ማውጣት
+                    import re
+                    match = re.search(r"🆔 ID: (\d+)", forwarded_text)
+                    
+                    if not match:
+                        # የድሮውን የማስተላለፊያ ፎርማት ተጠቅመን ከ @username/ID ማውጣት
+                        match = re.search(r"**አዲስ ውይይት ከ: @(.+?)**", forwarded_text)
+                        
+                    if not match:
+                         match = re.search(r"**አዲስ ውይይት ከ: @\w+**", forwarded_text)
+
+                    if not match:
+                        bot.send_message(chat_id, "❌ Target User ID በሪፕላይ በተደረገው መልዕክት ጽሑፍ ውስጥ አልተገኘም። እባክህ **የመጀመሪያውን** Hanita የላከችውን Forwarded Message ተመልከት።")
+                        return
+
+                    target_user_id = match.group(1) # የ Target IDን ወይም Usernameን መያዝ
+                    
+                    # ውይይቱ የተጀመረበትን ትክክለኛ ID ማግኘት
+                    
+                    
+                    override_text = text[text.find(':') + 1:].strip()
+                    target_user_id = str(target_user_id) # IDው string መሆኑን ማረጋገጥ
+                    
+                    user_data_to_send = load_json(USER_DATA_FILE, {}).get(target_user_id)
+
+                    if user_data_to_send:
+                        # መልሱን በቀጥታ ለተጠቃሚው መላክ
+                        bot.send_message(
+                            int(target_user_id), # ለግል ቻት ለመላክ ወደ Integer መቀየር
+                            f"**Hanita Bot:** {override_text}",
+                            parse_mode='Markdown'
+                        )
+                        # ለአድሚኑ ማረጋገጫ መስጠት
+                        bot.send_message(
+                            chat_id, 
+                            f"✅ መልስህ ለተጠቃሚ **{user_data_to_send.get('first_name', 'N/A')}** በስኬት ተልኳል።"
+                        )
+                        # ታሪክን ማዘመን (እንደ Hanita ምላሽ እንዲታይ)
+                        update_chat_history(target_user_id, "model", override_text)
+                        
+                        return # የ Gemini APIን እንዳይጠራ ማቆም
+                    else:
+                         bot.send_message(chat_id, "❌ ተጠቃሚው አልተመዘገበም ወይም IDው አልተገኘም።")
+                         return
+
+                except Exception as e:
+                    bot.send_message(chat_id, f"❌ ለተጠቃሚው መልስ በመላክ ላይ ከባድ ስህተት ተፈጠረ: {e}")
+                    return
+            else:
+                bot.send_message(chat_id, "⚠️ ይህ ትዕዛዝ (መልስ:/Response:) የሌላ ተጠቃሚ መልዕክት ላይ **Reply** ተደርጎ መላክ አለበት።")
+                return
+        
+        # አድሚን ቢሆንም የ override ትዕዛዝ ካልሆነ፣ ወደ ቀጣዩ ሂደት ይሄዳል
 
     # --- 1. ግሩፕ ላይ የሪፕላይ ፍተሻ (1ኛ ህግ) ---
     if chat_id == TELEGRAM_GROUP_ID:
@@ -553,7 +645,8 @@ def gemini_auto(message):
                 f"**አዲስ ውይይት ከ: @{message.from_user.username or user_id}**\n\n"
                 f"**በ:{'ግል መልዕክት' if chat_id != TELEGRAM_GROUP_ID else 'ግሩፕ'}**\n"
                 f"**ጥያቄ:** {text}\n"
-                f"**የ Hanita ምላሽ:** {hanita_response_text}"
+                f"**የ Hanita ምላሽ:** {hanita_response_text}\n\n"
+                f"🆔 ID: {user_id}" # ለ Override እንዲመች IDውን መጨመር
             )
             bot.send_message(
                 ADMIN_ID,
