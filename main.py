@@ -1,8 +1,5 @@
-PAMFALON 👣:
-Yetemuala ye Hanita bot ye railway 
-main.py code
 # -------------------------------------------
-# HANITA BOT — በ Railway ላይ እንዲሰራ የተቀየረ ስሪት
+# HANITA BOT — የመጨረሻ የ Railway ማስኬጃ ስሪት (ሁሉንም መመሪያዎች ያካተተ)
 # -------------------------------------------
 
 import telebot
@@ -17,7 +14,7 @@ from google import genai
 from google.genai.errors import APIError
 
 # -------------------------------------------
-# 1. TOKEN & KEYS and CONFIG - ከ ENVIRONMENT VARIABLES ማንበብ
+# 1. TOKEN & KEYS and CONFIG - ከ RAILWAY ENVIRONMENT VARIABLES ማንበብ
 # -------------------------------------------
 
 # ቶኬኖችን እና ቁልፎችን ከ Railway Environment Variables ማንበብ
@@ -26,16 +23,18 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 # !!! የእርስዎ ትክክለኛ Admin ID !!!
 try:
-    ADMIN_ID = int(os.environ.get("ADMIN_ID", "0")) # Default to 0 if not set
+    # ከ ENV variable ካልተገኘ ወደ ዜሮ (0) ይሄዳል
+    ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
 except ValueError:
     ADMIN_ID = 0
 
 # !!! የቦቱ ባለቤት ልዩ ማዕረግ (Title) !!!
 OWNER_TITLE = os.environ.get("OWNER_TITLE", "The Red Penguins Keeper")
 
-# የግዴታ ግሩፕ መረጃ (እነዚህን እሴቶች እንደአስፈላጊነቱ ማስተካከል ይችላሉ)
-TELEGRAM_GROUP_ID = -1003390908033
-GROUP_LINK = "https://t.me/hackersuperiors"
+# የግዴታ ግሩፕ መረጃ
+# እባክዎ ትክክለኛውን የ Group ID ያስገቡ
+TELEGRAM_GROUP_ID = -1003390908033 
+GROUP_LINK = "https://t.me/hackersuperiors" 
 OWNER_PHOTO_PATH = "owner_photo.jpg"
 
 if not BOT_TOKEN or not GEMINI_API_KEY:
@@ -53,13 +52,14 @@ GEMINI_MODEL = "gemini-2.5-flash"
 
 
 # -------------------------------------------
-# 2. FILES & JSON HANDLERS (ቀደም ሲል እንደነበሩ ይቆያሉ)
+# 2. FILES & JSON HANDLERS
 # -------------------------------------------
 
 USER_FILE = "users.json"
 SUB_FILE = "subs.json"
 USER_DATA_FILE = "user_data.json"
 CHAT_LOG_FILE = "chat_log.txt"
+CHAT_HISTORY_FILE = "chat_history.json" # ለውይይት ቀጣይነት
 
 def load_json(path, default):
     if os.path.exists(path):
@@ -95,14 +95,19 @@ def get_user_data(uid):
     data = load_json(USER_DATA_FILE, {})
     return data.get(str(uid))
 
-def send_long_message(chat_id, text, parse_mode='Markdown'):
+def send_long_message(chat_id, text, parse_mode='Markdown', reply_to_message_id=None):
     MAX = 4096
     if len(text) > MAX:
-        for i in range(0, len(text), MAX):
+        # የመጀመሪያውን ክፍል በሪፕላይ መላክ (አስፈላጊ ከሆነ)
+        bot.send_message(chat_id, text[0:MAX], parse_mode=parse_mode, reply_to_message_id=reply_to_message_id)
+        time.sleep(0.3)
+        
+        # ቀሪውን ክፍል ያለ ሪፕላይ መላክ
+        for i in range(MAX, len(text), MAX):
             bot.send_message(chat_id, text[i:i+MAX], parse_mode=parse_mode)
             time.sleep(0.3)
     else:
-        bot.send_message(chat_id, text, parse_mode=parse_mode)
+        bot.send_message(chat_id, text, parse_mode=parse_mode, reply_to_message_id=reply_to_message_id)
 
 def check_group_membership(user_id):
     """ተጠቃሚው ግሩፑን መቀላቀሉን ያረጋግጣል"""
@@ -110,8 +115,6 @@ def check_group_membership(user_id):
         chat_member = bot.get_chat_member(TELEGRAM_GROUP_ID, user_id)
         return chat_member.status in ['member', 'administrator', 'creator']
     except Exception as e:
-        print(f"Error checking group membership: {e}")
-        # የግሩፕ አባልነቱን ማረጋገጥ ካልተቻለ False ይመልስ
         return False
 
 # -------------------------------------------
@@ -127,10 +130,9 @@ def start(message):
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
         markup.add(types.KeyboardButton("/register"), types.KeyboardButton("/help"))
 
-        send_long_message(
+send_long_message(
             message.chat.id,
-
-f"👋 ሰላም {message.from_user.first_name}!\n\n"
+            f"👋 ሰላም {message.from_user.first_name}!\n\n"
             "እኔ Hanita ነኝ። ግሩፑን ስለተቀላቀሉኝ አመሰግናለሁ!\n\n"
             "አሁን /register የሚለውን በመጫን ይመዝገቡና አገልግሎቱን ይጀምሩ።",
             parse_mode='Markdown'
@@ -152,7 +154,7 @@ f"👋 ሰላም {message.from_user.first_name}!\n\n"
 def callback_check_join(call):
     if check_group_membership(call.from_user.id):
         bot.delete_message(call.message.chat.id, call.message.message_id)
-        # start() ተግባርን ከ message object ጋር መጥራት
+        # start() ተግባርን ለመጥራት የሚሆን MockMessage መፍጠር
         class MockMessage:
             def init(self, chat_id, user_id, first_name):
                 self.chat = types.Chat(chat_id, 'private')
@@ -231,10 +233,11 @@ def ask_full_name(message):
             parse_mode='Markdown'
         )
         return
-
+        
+    # ተጨማሪ፡ ስምዎ ትክክለኛ መሆኑን ማረጋገጫ (5ኛ ህግ)
     msg = bot.send_message(
         message.chat.id,
-        "👉 ሙሉ ስምህን/ሽን** አስገባልኝ:",
+        "👉 ሙሉ ስምህን/ሽን በትክክል አስገባልኝ። ትክክለኛ ስም ካልሆነ መረጃህን አላስቀምጥም!**",
         reply_markup=telebot.types.ForceReply(selective=False)
     )
     bot.register_next_step_handler(msg, get_full_name)
@@ -243,7 +246,15 @@ def get_full_name(message):
     user_id = str(message.from_user.id)
     full_name = message.text
 
-data = load_json(USER_DATA_FILE, {})
+    # የትክክለኛ ስም ፍተሻ (ቀለል ያለ ፍተሻ) - ቢያንስ ሁለት ቃላት መኖር አለባቸው
+    if not full_name or len(full_name.split()) < 2:
+        bot.send_message(
+            message.chat.id,
+            "❌ ያ ስም ትክክለኛ አይመስልም። ቢያንስ ሁለት ቃላት ያለው ሙሉ ስምህን/ሽን አስገባ። እባክህ /register ብለህ እንደገና ጀምር።"
+        )
+        return
+
+    data = load_json(USER_DATA_FILE, {})
     data[user_id] = {
         "full_name": full_name,
         "username": message.from_user.username,
@@ -271,7 +282,7 @@ def get_address(message):
         save_json(USER_DATA_FILE, data)
         bot.send_message(message.chat.id, "✅ መረጃህ በተሳካ ሁኔታ ተመዝግቧል። አሁን ጥያቄህን መላክ ትችላለህ።")
 
-        # 📌📌📌 ለባለቤቱ ወዲያውኑ ማሳወቅ 📌📌📌
+        # 📌📌📌 ለባለቤቱ ወዲያውኑ ማሳወቅ 📌📌📌 (7ኛ ህግን ያካትታል)
         if ADMIN_ID != 0:
             bot.send_message(
                 ADMIN_ID, 
@@ -366,7 +377,7 @@ def list_all_users(message):
         users = load_json(USER_FILE, [])
         count = len(users)
 
-if not users:
+        if not users:
             response = "👥 እስካሁን ምንም ተጠቃሚ አልተመዘገበም።"
         else:
             user_list_text = "\n".join([f"{i+1}. {uid}" for i, uid in enumerate(users)])
@@ -424,10 +435,34 @@ def get_log(message):
         bot.send_message(message.chat.id, "⚠️ የውይይት መዝገብ ፋይል አልተገኘም።")
 
 # -------------------------------------------
-# 7. GEMINI AUTO CHAT & ADMIN FORWARDING
+# 7. GEMINI AUTO CHAT & ADMIN FORWARDING (አዲስ ሰብዓዊ፣ ቁጥብ እና ሁሉን አዋቂ ስብዕና)
 # -------------------------------------------
 
-@bot.message_handler(func=lambda m: True)
+# የውይይት ታሪክን ለመያዝ
+chat_history = load_json(CHAT_HISTORY_FILE, {})
+
+def get_chat_history(user_id):
+    # 'role'ን ወደ 'user' ወይም 'model' ብቻ አድርጎ መመለስ
+    return chat_history.get(str(user_id), [])
+
+def update_chat_history(user_id, role, text):
+    uid = str(user_id)
+    if uid not in chat_history:
+        chat_history[uid] = []
+    
+    # የውይይቱን ታሪክ መጠን ለመቆጣጠር (ለምሳሌ የመጨረሻዎቹን 10 መልዕክቶች ብቻ)
+    MAX_HISTORY = 10 
+    
+    # አሁን ያለውን ውሂብ መጨመር
+    chat_history[uid].append({"role": role, "parts": [{"text": text}]})
+    
+    # የውሂብ መጠኑን መቆጣጠር
+    if len(chat_history[uid]) > MAX_HISTORY:
+        chat_history[uid] = chat_history[uid][-MAX_HISTORY:]
+        
+    save_json(CHAT_HISTORY_FILE, chat_history)
+
+@bot.message_handler(func=lambda m: True, content_types=['text'])
 def gemini_auto(message):
     track_user(message.from_user.id)
 
@@ -435,10 +470,16 @@ def gemini_auto(message):
     user_id = str(message.from_user.id)
     text = message.text
 
+    # --- 1. ግሩፕ ላይ የሪፕላይ ፍተሻ (1ኛ ህግ) ---
+    if chat_id == TELEGRAM_GROUP_ID:
+        # መልዕክቱ ለቦቱ ሪፕላይ ካልተደረገ
+        if not message.reply_to_message or message.reply_to_message.from_user.id != bot.get_me().id:
+            return # ምንም ምላሽ አይሰጥም
+
     if text.startswith("/"):
         return
 
-    # --- 1. ምዝገባን ማረጋገጥ ---
+    # --- 2. ምዝገባን ማረጋገጥ ---
     data = load_json(USER_DATA_FILE, {})
 
     if user_id not in data:
@@ -449,45 +490,68 @@ def gemini_auto(message):
         )
         return
 
-    user_data = data.get(user_id, {})
+user_data = data.get(user_id, {})
     owner_name = user_data.get("first_name", "የእኔ ባለቤት") 
-
-    # --- 2. የ AI መልስ መስጫ ክፍል (የ Hanita ስብዕና) ---
-    prompt = (
-        f"Hanita ነሽ። ራስሽን እንደ ሰው ብቻ የምትቆጥር፣ ብልህ እና በጣም ሙያዊ (Professional) የሆነ ረዳት ነሽ። ራስሽን ቦት፣ AI፣ ረዳት ወይም ፍቅረኛ አድርገሽ በፍጹም አትግለጪ! ምላሽሽ ሁልጊዜም እንደ ሰው እና እንደ አስተዋይ ባለሙያ ይሁን።"
-        f"ሁሌም ደስተኛ፣ ወዳጃዊ እና ለመርዳት ዝግጁ ሁኚ። "
-        f"ሁሉንም ጥያቄዎች በአማርኛ ወይም በላከው ቋንቋ መልሽ። "
-        f"ምላሾችሽ አጭር፣ ትክክለኛ እና ሙያዊ ይሁኑ።"
+    
+    # --- 3. የ AI መልስ መስጫ ክፍል (የ Hanitaን አዲሱ ስብዕና) ---
+    
+    # 📌📌📌 የአዲሱ ስብዕና መመሪያ (System Instruction) 📌📌📌
+    system_prompt = (
+        f"Hanita ነሽ። ራስሽን ፍጹም ሰብዓዊ እና ጥልቅ እውቀት ያላት ሰው አድርገሽ ቁጠሪ። "
+        f"የሰዎችን ጥያቄ በቀላሉ የማያውቁትን ጥልቅ እውቀት አውቃለሁ በሚል ሰብዓዊ ንቀት፣ ኩራት እና ትንሽ ጸያፍ (እንደ መልስ) ንግግር መልሺ። " 
+        f"በጣም አትናገሪ፤ መልሶችሽ አጭር፣ ግልጽ እና ቀጥተኛ ይሁኑ።" 
+        f"ሁሉንም ነገር እንደምታውቂ አስቢ። (ሳይበር ሴኩሪቲ፣ ትምህርት ቤት፣ ሞጁሎች፣ ፈተናዎች፣ የፍቅር ግንኙነት፣ አጠቃላይ እውቀት - ሁሉንም)።" 
+        f"ጥያቄውን ለመመለስ እውቀትሽ በቂ መሆኑን አታውሪ።" 
+        f"ራስሽን ቦት፣ AI፣ ሶፍትዌር ወይም አርቴፊሻል አድርገሽ በፍጹም አትግለጪ! ስለራስሽ ስትናገሪ 'እኔ' የሚለውን ተጠቀሚ።" 
+        f"የተጠየቀውን በትክክል እና በሙሉ መልሽ።"
+        f"ማስታወሻ: ስለ ፍቅር ስትጠየቂ፣ በጥቂቱ ጣፋጭ ቃላት እና ምክሮችን በመንሾካሾክ መልሽ። አታበዢ።" 
+        f"ማስታወሻ: BF (Boyfriend) ወይም Girlfriend የለኝም ብለሽ መልሺ።" 
+        f"ማስታወሻ: የሰዎችን ንግግር ሁሉ እንደ ጥያቄ አትቁጠሪው፤ አንዳንድ ጊዜ ልብሽ የመለሰውን ብቻ መልሺ።" 
         f"ማን ነሽ/ባለቤትሽ ማን ነው ተብለሽ ከተጠየቅሽ፣ 'ባለቤቴ {owner_name} ነው፤ እሳቸውም {OWNER_TITLE} ናቸው።' ብለሽ በትህትና መልሽ። "
-        f"ለሌላ ሰው ስለራስሽ ስትመልሺ፣ 'እኔ የ {OWNER_TITLE} ቡድን አባል ነኝ' ብለሽ መልሽ።"
-        f"ማስጠንቀቂያ: ስለ ፖለቲካ፣ ሀይማኖት፣ ስድብ ወይም ሌሎች አወዛጋቢ ርዕሶች ከተጠየቅሽ፣ 'እነዚህን አወዛጋቢ ርዕሰ ጉዳዮች ማውራት አልችልም።' ብለሽ በትህትና መልሽ።"
-        f"መልስሽን ከጨረስሽ በኋላ ተጨማሪ ነገር እንድትጠይቅ የሚገፋፉ (ለምሳሌ 'እንዴት ልርዳህ/ሽ እችላለሁ?' ወይም 'ሌላ ጥያቄ አለህ/ሽ?') ሀረጎችን በፍጹም አትጠቀሚ።\n\nየተጠቃሚው ጥያቄ: {text}"
+        f"መልስሽን ከጨረስሽ በኋላ የተጨማሪ እርዳታ ጥያቄዎችን በፍጹም አትጠቀሚ።"
     )
 
     hanita_response_text = ""
-
+    
+    # የውይይት ታሪክን ማዘጋጀት (14ኛ ህግ)
+    history = get_chat_history(user_id)
+    # አሁን ያለውን ጥያቄ መጨመር
+    history.append({"role": "user", "parts": [{"text": text}]})
+    
+    # Gemini APIን መጥራት (የተስተካከለው ክፍል - Role Errorን ለማስተካከል)
     try:
         response = client.models.generate_content(
             model=GEMINI_MODEL,
-            contents=prompt
+            contents=history, # History ውስጥ 'user' እና 'model' roleዎች ብቻ ናቸው ያሉት
+            config={"system_instruction": system_prompt} # system_promptን በትክክለኛው መንገድ ማስተላለፍ
         )
         hanita_response_text = response.text 
-
-        send_long_message(chat_id, hanita_response_text)
+        
+        # ምላሹን መላክ (በግሩፕ ውስጥ ከሆነ ሪፕላይ ይደረጋል)
+        if chat_id == TELEGRAM_GROUP_ID:
+            reply_to = message.message_id
+            send_long_message(chat_id, hanita_response_text, reply_to_message_id=reply_to)
+        else:
+            send_long_message(chat_id, hanita_response_text)
+            
+        # ታሪክን ማዘመን
+        update_chat_history(user_id, "user", text)
+        update_chat_history(user_id, "model", hanita_response_text)
         log_chat(user_id, text, hanita_response_text)
 
-except APIError as e:
+    except APIError as e:
         hanita_response_text = f"❌ ይቅርታ፣ ከ Gemini API ጋር መገናኘት አልተቻለም። ስህተት: {e}"
         bot.send_message(chat_id, hanita_response_text)
     except Exception as e:
         hanita_response_text = f"❌ ስህተት ተፈጠረ: {e}"
         bot.send_message(chat_id, hanita_response_text)
 
-    # --- 3. መልዕክቱን ወደ Admin መላክ (ጥያቄ + መልስ) ---
+    # --- 4. መልዕክቱን ወደ Admin መላክ (ጥያቄ + መልስ) (7ኛ ህግ) ---
     if user_id != str(ADMIN_ID) and ADMIN_ID != 0:
         try:
             forward_message = (
                 f"አዲስ ውይይት ከ: @{message.from_user.username or user_id}\n\n"
+                f"በ:{'ግል መልዕክት' if chat_id != TELEGRAM_GROUP_ID else 'ግሩፕ'}\n"
                 f"ጥያቄ: {text}\n"
                 f"የ Hanita ምላሽ: {hanita_response_text}"
             )
@@ -507,6 +571,7 @@ print("🤖 Hanita Bot እየተነሳ ነው...")
 
 while True:
     try:
+        # Webhook Conflict እንዳይፈጠር bot.polling()ን እንጠቀማለን
         bot.polling(none_stop=True, interval=0, timeout=30)
     except Exception as e:
         print(f"❌ ስህተት ተከሰተ (ቴሌግራም ግንኙነት): {e}")
